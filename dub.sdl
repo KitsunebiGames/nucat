@@ -29,3 +29,8 @@ configuration "LV2" {
 	targetType "dynamicLibrary"
 	versions "LV2"
 }
+
+configuration "AU" {
+	targetType "dynamicLibrary"
+	versions "AU"
+}

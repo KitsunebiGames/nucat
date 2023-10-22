@@ -3,6 +3,7 @@ import dplug.core, dplug.client;
 import std.math;
 import dplug.core.random;
 import std.random : Xorshift32;
+import std.algorithm.comparison;
 
 import ddsp.filter;
 import ddsp.effect;
@@ -10,7 +11,8 @@ import ddsp.effect;
 import 
     nucat.common, 
     nucat.voice,
-    nucat.adsr;
+    nucat.adsr,
+    nucat.fx;
 
 
 /**
@@ -23,12 +25,28 @@ private:
 
     Voice[NUCAT_MAX_POLY] _voices;
 
+    size_t heldI;
+    int[NUCAT_MAX_POLY] _heldNotes;
+
     ADSR ponkoadsr;
     int playing;
 
     float noiseGain;
 
-    Chorus!float chorus;
+    // T delta
+    float tDelta = 0;
+    float t = 0;
+    
+    // Vibrato
+    float vibratoAttack = 0;
+    float vibratoRate = 0;
+    float vibratoDepth = 0;
+
+    // FX Section
+    BetterChorus!float chorus;
+    BetterVibrato!float vibrato;
+
+    bool polyPath;
 
 public:
     this() {
@@ -37,7 +55,8 @@ public:
         }
 
         ponkoadsr = ADSR.createNew();
-        chorus = mallocNew!(Chorus!float)();
+        chorus = mallocNew!(BetterChorus!float)();
+        vibrato = mallocNew!(BetterVibrato!float)();
     }
 
     /**
@@ -60,6 +79,11 @@ public:
 
         chorus.reset();
         chorus.setSampleRate(sampleRate);
+
+        vibrato.reset();
+        vibrato.setSampleRate(sampleRate);
+
+        tDelta = 1/sampleRate;
     }
 
     /**
@@ -74,21 +98,22 @@ public:
             voice.adsr.setDecay(client.readParam!float(MEOW_DECAY)+0.01);
             voice.adsr.setSustain(client.readParam!float(MEOW_SUSTAIN));
             voice.adsr.setRelease(client.readParam!float(MEOW_RELEASE)+0.01);
-
-            voice.setVibratoAttack(client.readParam!float(MEOW_VIBRATO_ATK));
-            voice.setVibratoDepth(client.readParam!float(MEOW_VIBRATO_AMNT));
-            voice.setVibratoRate(client.readParam!float(MEOW_VIBRATO_SPEED));
-
         }
-        chorus.setParams(0.5, client.readParam!float(MEOW_CHORUS));
-        
+
+        chorus.setParams(0.25, client.readParam!float(MEOW_CHORUS));
+
+        this.vibratoAttack = client.readParam!float(MEOW_VIBRATO_ATK);
+        this.vibratoDepth = client.readParam!float(MEOW_VIBRATO_AMNT);
+        this.vibratoRate = client.readParam!float(MEOW_VIBRATO_SPEED);
 
         ponkoadsr.setAttack(client.readParam!float(MEOW_ATTACK)+0.01);
         ponkoadsr.setDecay(client.readParam!float(MEOW_DECAY)+0.01);
         ponkoadsr.setSustain(client.readParam!float(MEOW_SUSTAIN));
-        ponkoadsr.setRelease(0.1);
+        ponkoadsr.setRelease(client.readParam!float(MEOW_RELEASE)+0.01);
 
         noiseGain = client.readParam!float(MEOW_NOISE);
+
+        polyPath = client.readParam!bool(MEOW_POLYCAT);
     }
 
     /**
@@ -106,38 +131,58 @@ public:
         ponkoadsr.kill();
         ponkoadsr.play();
 
-        // First try finding a silent, non-playing voice
-        ptrdiff_t fReleased = -1;
-        foreach(i, ref v; _voices) {  
+        if (polyPath) {
 
-            // Retrigger
-            if (v.getNote() == note) {
-                if (!v.adsr.getGate()) {
-                    playing++;
-                }
-                v.play(note, velocity);
-                return;
-            }
+            // First try finding a silent, non-playing voice
+            ptrdiff_t fReleased = -1;
+            foreach(i, ref v; _voices) {  
 
-            if (!v.isPlaying) {
-
-                // Store the first non-playing voice
-                if (fReleased < 0) fReleased = i;
-
-                // Only try replacing voices which are not playing,
-                // And which has ended their ADSR envelope cycle
-                if (!v.adsr.getGate() && v.adsr.getState() == ADSRState.idle) {
+                // Retrigger
+                if (v.getNote() == note) {
+                    if (!v.adsr.getGate()) {
+                        playing++;
+                        
+                        if (playing == 1) t = 0;
+                    }
                     v.play(note, velocity);
-                    playing++;
                     return;
                 }
-            }
-        }
 
-        // Replace the first non-playing voice
-        // If that fails we're out of voices and we'll stay silent.
-        if (fReleased >= 0) {
-            _voices[fReleased].play(note, velocity);
+                if (!v.isPlaying) {
+
+                    // Store the first non-playing voice
+                    if (fReleased < 0) fReleased = i;
+
+                    // Only try replacing voices which are not playing,
+                    // And which has ended their ADSR envelope cycle
+                    if (!v.adsr.getGate() && v.adsr.getState() == ADSRState.idle) {
+                        v.play(note, velocity);
+                        playing++;
+                        
+                        if (playing == 1) t = 0;
+                        return;
+                    }
+                }
+            }
+            
+
+            // Replace the first non-playing voice
+            // If that fails we're out of voices and we'll stay silent.
+            if (fReleased >= 0) {
+                _voices[fReleased].play(note, velocity);
+            }
+        } else {
+
+            if (playing < NUCAT_MAX_POLY) {
+                if (_voices[0].isPlaying) {
+                    _voices[0].kill();
+                }
+                
+                _voices[0].play(note, velocity);
+                _heldNotes[playing] = note;
+                playing++;
+            }
+
         }
     }
 
@@ -145,11 +190,43 @@ public:
         Releases a note
     */
     void releaseNote(int note) {
-        foreach(ref v; _voices) {
-            if (v.isPlaying() && v.getNote == note) {
-                v.release();
+        if (polyPath) {
+            foreach(ref v; _voices) {
+                if (v.isPlaying() && v.getNote == note) {
+                    v.release();
+                    playing--;
+                    return;
+                }
+            }
+        } else {
+
+            // Find released note in list
+            ptrdiff_t hn = -1;
+            foreach(i, hnote; _heldNotes) {
+                if (hnote == note) {
+                    hn = i;
+                }
+            }
+
+            // Note was found, release it, and pop it
+            if (hn >= 0) {
                 playing--;
-                return;
+
+                // Move everything to the right after the held note
+                // this will update the list.
+                if (hn < playing) {
+                    _heldNotes[hn..$-1] = _heldNotes[hn+1..$];
+                }
+
+                // Play the last note in the held list
+                if (playing > 0) {
+                    if (_voices[0].getNote() == note) {
+                        _voices[0].kill();
+                        _voices[0].play(_heldNotes[playing-1]);
+                    }
+                } else {
+                    _voices[0].release();
+                }
             }
         }
     }
@@ -164,6 +241,7 @@ public:
         }
         
         playing = 0;
+        heldI = 0;
         ponkoadsr.release();
     }
 
@@ -177,6 +255,7 @@ public:
         }
 
         foreach(ref sample; outputs[0][0..frames]) {
+            this.t += tDelta;
 
             float pnkenv = ponkoadsr.nextSample();
 
@@ -188,14 +267,24 @@ public:
                     v++;
                 }
             }
+            
+            // In case vibrato is turned on, linear 
+            // interpolate between the normal sample 
+            // and the vibrato'd sample.
+            if (vibratoDepth > 0) {
+                float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
+                vibrato.setParams(this.vibratoRate*5, lerp(0, this.vibratoDepth, vt));
+                output = vibrato.getNextSample(output); 
+            }
 
+            // Chorus
             sample = chorus.getNextSample(output) * NUCAT_I_GAIN;
 
+            // Noise
             if (noiseGain > 0 && playing > 0) {
                 float noise = (nogc_uniform_float(0, 1, defaultGlobalRNG())*noiseGain);
                 sample += (noise * pnkenv) * NUCAT_I_GAIN;
             }
-            
         }
 
         // Copy to other channels
@@ -205,6 +294,6 @@ public:
     }
 
     float getPonkoADSR() {
-        return ponkoadsr.getOutputAtomic;
+        return ponkoadsr.getOutput;
     }
 }

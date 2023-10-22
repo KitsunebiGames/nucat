@@ -19,27 +19,14 @@ private:
     ADSR envelope;
     BiquadDelay lp;
     BiquadDelay bell;
-
-    Vibrato!float vibrato;
-    Chorus!float chorus;
     
     int note;
     float velocity = 0;
     float deltaPhase = 0;
     float bend = 0;
-    
-    float vibratoAttack = 0;
-    float vibratoRate = 0;
-    float vibratoDepth = 0;
-
-    float chorusDepth = 0;
-
-    float tDelta = 0;
-    float t = 0;
 
     void recalculateDelta() {
         this.deltaPhase = (freq * TAU / sampleRate);
-        this.tDelta = 1/sampleRate;
     }
 public:
     float freq = 0;
@@ -49,9 +36,6 @@ public:
         envelope = ADSR.createNew();
         lp.initialize();
         bell.initialize();
-
-        vibrato = mallocNew!(Vibrato!float)();
-        chorus = mallocNew!(Chorus!float)();
     }
 
     /**
@@ -60,17 +44,14 @@ public:
     void play(int note, float velocity = 1) {
         this.note = note;
         this.velocity = velocity;
-        this.t = 0;
         
         if (envelope.isPlaying()) {
-            vibrato.reset();
             envelope.kill();
         }
         
         envelope.play();
         this.freq = convertMIDINoteToFrequency(this.note+(this.bend*12));
         this.recalculateDelta();
-
     }
 
     /**
@@ -96,12 +77,6 @@ public:
         lp.initialize();
         bell.initialize();
         this.recalculateDelta();
-        vibrato.reset();
-        chorus.reset();
-
-        vibrato.setSampleRate(sampleRate);
-        vibrato.setParams(vibratoRate, vibratoDepth);
-        
     }
 
     /**
@@ -113,29 +88,6 @@ public:
         this.bend = bend;
         this.freq = convertMIDINoteToFrequency(cast(float)this.note+(this.bend*12.0));
         this.recalculateDelta();
-    }
-
-    /**
-        Sets the vibrato attack time
-    */
-    void setVibratoAttack(float attack) {
-        this.vibratoAttack = attack;
-    }
-
-    /**
-        Sets the vibrato rate
-    */
-    void setVibratoRate(float rate) {
-        this.vibratoRate = rate*10;
-        vibrato.setParams(vibratoRate, vibratoDepth);
-    }
-
-    /**
-        Sets the vibrato depth
-    */
-    void setVibratoDepth(float depth) {
-        this.vibratoDepth = depth;
-        vibrato.setParams(vibratoRate, vibratoDepth);
     }
 
     /**
@@ -156,7 +108,6 @@ public:
         Calculates the next sample in the meow
     */
     float nextSample() {
-        t += tDelta;
         phase += deltaPhase;
         while(phase >= TAU) phase -= TAU;
 
@@ -166,14 +117,7 @@ public:
         float env = envelope.nextSample();
         float saw = rawSawtooth(phase);
         
-        // In case vibrato is turned on, linear interpolate between the normal sample 
-        // and the vibrato'd sample.
-        if (vibratoDepth > 0) {
-            
-            float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
-            saw = lerp(saw, vibrato.getNextSample(saw), vt);
-        }
-
+    
         // As velocity lowers the meows should be softer
         // As such the logarithmic mapping needs to be
         // scrubbed between.
