@@ -1,0 +1,13 @@
+.dub
+docs.json
+__dummy.html
+docs/
+out/
+builds/
+*.exe
+*.o
+*.obj
+*.lst
+
+# Ignore selections to avoid useless stuff in repo
+dub.selections.json

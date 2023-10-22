@@ -1,0 +1,17 @@
+{
+    "$schema": "https://raw.githubusercontent.com/AuburnSounds/dplug/master/plugin-schema.json",
+
+    "vendorName": "Kitsunebi Games",
+    "vendorUniqueID": "KiGa",
+    "vendorSupportEmail": "luna@foxgirls.gay",
+
+    "pluginName": "NuCat",
+    "pluginHomepage": "foxgirls.gay/nucat",
+    "pluginUniqueID": "NNya",
+    "publicVersion": "1.0.0",
+    "CFBundleIdentifierPrefix": "gay.foxgirls",
+    "hasGUI": true,
+    "receivesMIDI": true,
+    "isSynth": true,
+    "category": "instrumentSynthesizer"
+}
