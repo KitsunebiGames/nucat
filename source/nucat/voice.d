@@ -21,13 +21,49 @@ private:
     BiquadDelay bell;
     
     int note;
+
     float velocity = 0;
     float deltaPhase = 0;
     float bend = 0;
 
+    // porta mode
+    float t = 0;
+    float deltaT = 0;
+    float targetDeltaPhase = 0;
+    int portaNote = -1;
+    float portaFreq = 0;
+    float portaAttack = 0;
+
     void recalculateDelta() {
         this.deltaPhase = (freq * TAU / sampleRate);
+        this.targetDeltaPhase = (portaFreq * TAU / sampleRate);
+        this.deltaT = 1/sampleRate;
     }
+
+    /**
+        Gets the current delta phase
+    */
+    float getCurrentDeltaPhase() {
+        if (portaNote >= 0) {
+            return portaAttack > 0 ? 
+                   lerp(deltaPhase, targetDeltaPhase, clamp(t/portaAttack, 0, 1)) : 
+                   targetDeltaPhase;
+        }
+        return deltaPhase;
+    }
+
+    /**
+        Gets the current frequency
+    */
+    float getCurrentFreq() {
+        if (portaNote >= 0) {
+            return portaAttack > 0 ? 
+                   lerp(freq, portaFreq, clamp(t/portaAttack, 0, 1)) : 
+                   portaFreq;
+        }
+        return freq;
+    }
+
 public:
     float freq = 0;
     float phase = 0;
@@ -52,6 +88,27 @@ public:
         envelope.play();
         this.freq = convertMIDINoteToFrequency(this.note+(this.bend*12));
         this.recalculateDelta();
+    }
+
+    /**
+        Sets porta target
+    */
+    void portaTo(int note) {
+        float newStartFreq = getCurrentFreq();
+        float newStartDelta = getCurrentDeltaPhase();
+
+        this.portaNote = note;
+        this.portaFreq = convertMIDINoteToFrequency(portaNote+(this.bend*12));
+        this.t = 0;
+
+        // Handle delta phase
+        this.recalculateDelta();
+        this.freq = newStartFreq;
+        this.deltaPhase = newStartDelta;
+    }
+
+    void setPortaAttack(float attack) {
+        this.portaAttack = attack;
     }
 
     /**
@@ -87,6 +144,11 @@ public:
     void pitchbend(float bend) {
         this.bend = bend;
         this.freq = convertMIDINoteToFrequency(cast(float)this.note+(this.bend*12.0));
+
+        // Handle porta
+        if (this.portaNote >= 0) {
+            this.portaFreq = convertMIDINoteToFrequency(cast(float)this.portaNote+(this.bend*12.0));
+        }
         this.recalculateDelta();
     }
 
@@ -108,7 +170,20 @@ public:
         Calculates the next sample in the meow
     */
     float nextSample() {
-        phase += deltaPhase;
+        float cPhase = getCurrentDeltaPhase();
+
+        // Portamento timer
+        t += deltaT;
+
+        // Portamento phase handling
+        if (portaNote >= 0 && cPhase == targetDeltaPhase) {
+            this.note = portaNote;
+            this.deltaPhase = targetDeltaPhase;
+
+            this.portaNote = -1;
+        }
+
+        phase += cPhase;
         while(phase >= TAU) phase -= TAU;
 
         // Vocal chords are essentially pure saw waves

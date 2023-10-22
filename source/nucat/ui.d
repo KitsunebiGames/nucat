@@ -46,6 +46,7 @@ private:
     
     UIKnob fxNoise;
     UIKnob fxChorus;
+    UIKnob fxPorta;
 
     UIPonkoVision ponkovision;
     UIPonkoUpdater!UIPonkoVision ponkoupdater;
@@ -84,6 +85,9 @@ public:
         vibSpeed.setDefaultKnobDesign();
 
         // FX Section
+        fxPorta = mallocNew!UIKnob(context, client.param(MEOW_PORTA));
+        fxPorta.setDefaultKnobDesign();
+
         fxNoise = mallocNew!UIKnob(context, client.param(MEOW_NOISE));
         fxNoise.setDefaultKnobDesign();
 
@@ -99,6 +103,7 @@ public:
         this.addChild(vibAttack);
         this.addChild(vibDepth);
         this.addChild(vibSpeed);
+        this.addChild(fxPorta);
         this.addChild(fxNoise);
         this.addChild(fxChorus);
     }
@@ -119,8 +124,9 @@ public:
         vibDepth.position  = rectangle(302, 145, 49, 49).scaleByFactor(scale);
         vibSpeed.position  = rectangle(412, 145, 49, 49).scaleByFactor(scale);
 
-        fxNoise.position     = rectangle(302, 234, 49, 49).scaleByFactor(scale);
-        fxChorus.position     = rectangle(412, 234, 49, 49).scaleByFactor(scale);
+        fxPorta.position   = rectangle(248, 234, 49, 49).scaleByFactor(scale);
+        fxNoise.position   = rectangle(302, 234, 49, 49).scaleByFactor(scale);
+        fxChorus.position  = rectangle(412, 234, 49, 49).scaleByFactor(scale);
 
         ponkovision.position = rectangle(11, 44, 214, 135).scaleByFactor(scale);
     }

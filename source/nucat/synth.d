@@ -47,6 +47,8 @@ private:
     BetterVibrato!float vibrato;
 
     bool polyPath;
+    float porta;
+    int pnote;
 
 public:
     this() {
@@ -91,6 +93,8 @@ public:
     */
     void update(Client client) {
 
+        porta = client.readParam!float(MEOW_PORTA);
+
         foreach(ref voice; _voices) {
             
             // TODO: Use listeners?
@@ -98,6 +102,8 @@ public:
             voice.adsr.setDecay(client.readParam!float(MEOW_DECAY)+0.01);
             voice.adsr.setSustain(client.readParam!float(MEOW_SUSTAIN));
             voice.adsr.setRelease(client.readParam!float(MEOW_RELEASE)+0.01);
+
+            voice.setPortaAttack(porta);
         }
 
         chorus.setParams(0.25, client.readParam!float(MEOW_CHORUS));
@@ -173,14 +179,26 @@ public:
             }
         } else {
 
-            if (playing < NUCAT_MAX_POLY) {
-                if (_voices[0].isPlaying) {
-                    _voices[0].kill();
+            if (playing+1 < NUCAT_MAX_POLY) {
+                pnote = note;
+                if (porta > 0) {
+                    
+                    // Portamento-to
+                    if (!_voices[0].isPlaying) {
+                        _voices[0].play(note, velocity);
+                    } else {
+                        _voices[0].portaTo(note);
+                    }
+                    
+                    _heldNotes[playing++] = note;
+                } else {
+                    if (_voices[0].isPlaying) {
+                        _voices[0].kill();
+                    }
+                    
+                    _voices[0].play(note, velocity);
+                    _heldNotes[playing++] = note;
                 }
-                
-                _voices[0].play(note, velocity);
-                _heldNotes[playing] = note;
-                playing++;
             }
 
         }
@@ -210,21 +228,32 @@ public:
 
             // Note was found, release it, and pop it
             if (hn >= 0) {
-                playing--;
 
                 // Move everything to the right after the held note
                 // this will update the list.
                 if (hn < playing) {
-                    _heldNotes[hn..$-1] = _heldNotes[hn+1..$];
+                    _heldNotes[hn..playing] = _heldNotes[hn+1..playing];
                 }
+                
+                playing--;
 
                 // Play the last note in the held list
                 if (playing > 0) {
-                    if (_voices[0].getNote() == note) {
-                        _voices[0].kill();
-                        _voices[0].play(_heldNotes[playing-1]);
+                    
+                    if (porta > 0) {
+                        if (_heldNotes[playing-1] != pnote) {
+                            pnote = _heldNotes[playing-1];
+                            _voices[0].portaTo(_heldNotes[playing-1]);
+                        }
+                    } else {
+                        if (_heldNotes[playing-1] != pnote) {
+                            pnote = _heldNotes[playing-1];
+                            _voices[0].kill();
+                            _voices[0].play(_heldNotes[playing-1]);
+                        }
                     }
                 } else {
+                    pnote = -1;
                     _voices[0].release();
                 }
             }
