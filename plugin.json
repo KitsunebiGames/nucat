@@ -6,6 +6,7 @@
     "vendorSupportEmail": "luna@foxgirls.gay",
 
     "pluginName": "NuCat",
+    "licensePath": "LICENSE",
     "pluginHomepage": "foxgirls.gay/nucat",
     "pluginUniqueID": "NNya",
     "publicVersion": "1.0.0",

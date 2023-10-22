@@ -9,5 +9,7 @@ builds/
 *.obj
 *.lst
 
+WindowsInstaller.nsi
+
 # Ignore selections to avoid useless stuff in repo
 dub.selections.json

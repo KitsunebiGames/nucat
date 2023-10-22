@@ -19,11 +19,13 @@ dflags "-link-defaultlib-shared=false" platform="linux-ldc"
 versions "futureMouseDrag" "legacyMouseCursor"
 importPaths "source/"
 stringImportPaths "." "res/"
+
 configuration "VST3" {
 	targetType "dynamicLibrary"
 	versions "VST3"
 }
-configuration "AU" {
+
+configuration "LV2" {
 	targetType "dynamicLibrary"
-	versions "AU"
+	versions "LV2"
 }
