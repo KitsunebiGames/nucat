@@ -63,12 +63,14 @@ public:
         this.t = 0;
         
         if (envelope.isPlaying()) {
+            vibrato.reset();
             envelope.kill();
         }
         
         envelope.play();
         this.freq = convertMIDINoteToFrequency(this.note+(this.bend*12));
         this.recalculateDelta();
+
     }
 
     /**
@@ -94,14 +96,11 @@ public:
         lp.initialize();
         bell.initialize();
         this.recalculateDelta();
-
         vibrato.reset();
+        chorus.reset();
+
         vibrato.setSampleRate(sampleRate);
         vibrato.setParams(vibratoRate, vibratoDepth);
-
-        chorus.reset();
-        chorus.setSampleRate(sampleRate);
-        chorus.setParams(1, chorusDepth);
         
     }
 
@@ -140,14 +139,6 @@ public:
     }
 
     /**
-        Sets the chorus
-    */
-    void setChorus(float depth) {
-        this.chorusDepth = depth;
-        chorus.setParams(0.5, chorusDepth*0.5);
-    }
-
-    /**
         Whether a meow is ongoing
     */
     bool isPlaying() {
@@ -178,15 +169,9 @@ public:
         // In case vibrato is turned on, linear interpolate between the normal sample 
         // and the vibrato'd sample.
         if (vibratoDepth > 0) {
+            
             float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
-
-            vibrato.setParams(vibratoRate, lerp(0, vibratoDepth, vt));
-            saw = vibrato.getNextSample(saw);
-        }
-
-        // In case chorus is turned on, apply it.
-        if (chorusDepth > 0) {
-            saw = chorus.getNextSample(saw);
+            saw = lerp(saw, vibrato.getNextSample(saw), vt);
         }
 
         // As velocity lowers the meows should be softer

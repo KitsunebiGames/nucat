@@ -28,6 +28,8 @@ private:
 
     float noiseGain;
 
+    Chorus!float chorus;
+
 public:
     this() {
         foreach(i; 0..NUCAT_MAX_POLY) {
@@ -35,6 +37,7 @@ public:
         }
 
         ponkoadsr = ADSR.createNew();
+        chorus = mallocNew!(Chorus!float)();
     }
 
     /**
@@ -54,6 +57,9 @@ public:
         foreach(i, ref voice; _voices) voice.reset(sampleRate);
         ponkoadsr.reset(sampleRate);
         this.releaseAll!true;
+
+        chorus.reset();
+        chorus.setSampleRate(sampleRate);
     }
 
     /**
@@ -73,8 +79,8 @@ public:
             voice.setVibratoDepth(client.readParam!float(MEOW_VIBRATO_AMNT));
             voice.setVibratoRate(client.readParam!float(MEOW_VIBRATO_SPEED));
 
-            voice.setChorus(client.readParam!float(MEOW_CHORUS));
         }
+        chorus.setParams(0.5, client.readParam!float(MEOW_CHORUS));
         
 
         ponkoadsr.setAttack(client.readParam!float(MEOW_ATTACK)+0.01);
@@ -183,7 +189,7 @@ public:
                 }
             }
 
-            sample = output * NUCAT_I_GAIN;
+            sample = chorus.getNextSample(output) * NUCAT_I_GAIN;
 
             if (noiseGain > 0 && playing > 0) {
                 float noise = (nogc_uniform_float(0, 1, defaultGlobalRNG())*noiseGain);
