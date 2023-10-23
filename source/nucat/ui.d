@@ -48,6 +48,8 @@ private:
     UIKnob fxChorus;
     UIKnob fxPorta;
 
+    UIButton polycat;
+
     UIPonkoVision ponkovision;
     UIPonkoUpdater!UIPonkoVision ponkoupdater;
 
@@ -93,6 +95,9 @@ public:
 
         fxChorus = mallocNew!UIKnob(context, client.param(MEOW_CHORUS));
         fxChorus.setDefaultKnobDesign();
+        
+        // CONFIG section
+        polycat = mallocNew!UIButton(context, cast(BoolParameter)client.param(MEOW_POLYCAT));
 
         this.addChild(attack);
         this.addChild(decay);
@@ -106,6 +111,7 @@ public:
         this.addChild(fxPorta);
         this.addChild(fxNoise);
         this.addChild(fxChorus);
+        this.addChild(polycat);
     }
 
     override
@@ -127,6 +133,8 @@ public:
         fxPorta.position   = rectangle(248, 234, 49, 49).scaleByFactor(scale);
         fxNoise.position   = rectangle(302, 234, 49, 49).scaleByFactor(scale);
         fxChorus.position  = rectangle(412, 234, 49, 49).scaleByFactor(scale);
+
+        polycat.position    = rectangle(17, 233, 47, 47).scaleByFactor(scale);
 
         ponkovision.position = rectangle(11, 44, 214, 135).scaleByFactor(scale);
     }

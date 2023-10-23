@@ -9,4 +9,5 @@ public import
     nucat.widgets.helpers,
     nucat.widgets.labelw,
     nucat.widgets.ponkovision,
-    nucat.widgets.ponkoupdater;
+    nucat.widgets.ponkoupdater,
+    nucat.widgets.btn;
