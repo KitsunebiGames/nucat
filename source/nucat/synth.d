@@ -8,10 +8,11 @@ import std.algorithm.comparison;
 import ddsp.filter;
 import ddsp.effect;
 
+import kon.env.adsr;
+
 import 
     nucat.common, 
     nucat.voice,
-    nucat.adsr,
     nucat.fx;
 
 
@@ -106,7 +107,7 @@ public:
             voice.setPortaAttack(porta);
         }
 
-        chorus.setParams(0.25, client.readParam!float(MEOW_CHORUS));
+        chorus.setParams(client.readParam!float(MEOW_CHORUS), 1);
 
         this.vibratoAttack = client.readParam!float(MEOW_VIBRATO_ATK);
         this.vibratoDepth = client.readParam!float(MEOW_VIBRATO_AMNT);
@@ -133,11 +134,11 @@ public:
         Plays a note with the wavetable
     */
     void playNote(int note, float velocity = 1) {
-        
-        ponkoadsr.kill();
-        ponkoadsr.play();
 
         if (polyPath) {
+        
+            ponkoadsr.kill();
+            ponkoadsr.play();
 
             // First try finding a silent, non-playing voice
             ptrdiff_t fReleased = -1;
@@ -179,6 +180,10 @@ public:
             }
         } else {
 
+            if (!_voices[0].isPlaying()) {
+                ponkoadsr.play();
+            }
+
             if (playing+1 < NUCAT_MAX_POLY) {
                 pnote = note;
                 if (porta > 0) {
@@ -192,10 +197,6 @@ public:
                     
                     _heldNotes[playing++] = note;
                 } else {
-                    if (_voices[0].isPlaying) {
-                        _voices[0].kill();
-                    }
-                    
                     _voices[0].play(note, velocity);
                     _heldNotes[playing++] = note;
                 }
@@ -248,7 +249,6 @@ public:
                     } else {
                         if (_heldNotes[playing-1] != pnote) {
                             pnote = _heldNotes[playing-1];
-                            _voices[0].kill();
                             _voices[0].play(_heldNotes[playing-1]);
                         }
                     }
@@ -300,14 +300,14 @@ public:
             // In case vibrato is turned on, linear 
             // interpolate between the normal sample 
             // and the vibrato'd sample.
-            if (vibratoDepth > 0) {
-                float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
-                vibrato.setParams(this.vibratoRate*5, lerp(0, this.vibratoDepth, vt));
-                output = vibrato.getNextSample(output); 
-            }
+            // float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
+            // vibrato.setParams(this.vibratoRate*5, lerp(0, this.vibratoDepth, vt));
+            // output = vibrato.getNextSample(output); 
+            
+            // TODO: Redo chorus and vibrato
 
             // Chorus
-            sample = chorus.getNextSample(output) * NUCAT_I_GAIN;
+            sample = output * NUCAT_I_GAIN;
 
             // Noise
             if (noiseGain > 0 && playing > 0) {

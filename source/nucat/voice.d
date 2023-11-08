@@ -1,6 +1,5 @@
 module nucat.voice;
 
-import nucat.adsr;
 import dplug.core;
 import std.math;
 
@@ -11,6 +10,9 @@ import std.algorithm.comparison;
 import ddsp.filter;
 import ddsp.effect;
 
+import kon.generators.basic;
+import kon.env.adsr;
+
 class Voice {
 @nogc:
 nothrow:
@@ -19,37 +21,23 @@ private:
     ADSR envelope;
     BiquadDelay lp;
     BiquadDelay bell;
+    KonPolyBLEPOSC!float osc;
     
     int note;
 
     float velocity = 0;
-    float deltaPhase = 0;
     float bend = 0;
 
     // porta mode
     float t = 0;
     float deltaT = 0;
-    float targetDeltaPhase = 0;
     int portaNote = -1;
     float portaFreq = 0;
     float portaAttack = 0;
 
     void recalculateDelta() {
-        this.deltaPhase = (freq * TAU / sampleRate);
-        this.targetDeltaPhase = (portaFreq * TAU / sampleRate);
+        osc.setFrequency(freq);
         this.deltaT = 1/sampleRate;
-    }
-
-    /**
-        Gets the current delta phase
-    */
-    float getCurrentDeltaPhase() {
-        if (portaNote >= 0) {
-            return portaAttack > 0 ? 
-                   lerp(deltaPhase, targetDeltaPhase, clamp(t/portaAttack, 0, 1)) : 
-                   targetDeltaPhase;
-        }
-        return deltaPhase;
     }
 
     /**
@@ -72,20 +60,20 @@ public:
         envelope = ADSR.createNew();
         lp.initialize();
         bell.initialize();
+
+        // Oscillator
+        osc = mallocNew!(KonPolyBLEPOSC!float)();
+        osc.setShape(BasicOSCShape.saw);
     }
 
     /**
         ニャ～
     */
     void play(int note, float velocity = 1) {
+        if (!envelope.getGate) envelope.play();
+
         this.note = note;
         this.velocity = velocity;
-        
-        if (envelope.isPlaying()) {
-            envelope.kill();
-        }
-        
-        envelope.play();
         this.freq = convertMIDINoteToFrequency(this.note+(this.bend*12));
         this.recalculateDelta();
     }
@@ -95,7 +83,6 @@ public:
     */
     void portaTo(int note) {
         float newStartFreq = getCurrentFreq();
-        float newStartDelta = getCurrentDeltaPhase();
 
         this.portaNote = note;
         this.portaFreq = convertMIDINoteToFrequency(portaNote+(this.bend*12));
@@ -104,7 +91,6 @@ public:
         // Handle delta phase
         this.recalculateDelta();
         this.freq = newStartFreq;
-        this.deltaPhase = newStartDelta;
     }
 
     void setPortaAttack(float attack) {
@@ -134,6 +120,8 @@ public:
         lp.initialize();
         bell.initialize();
         this.recalculateDelta();
+        osc.setSampleRate(sampleRate);
+        osc.reset();
     }
 
     /**
@@ -170,27 +158,25 @@ public:
         Calculates the next sample in the meow
     */
     float nextSample() {
-        float cPhase = getCurrentDeltaPhase();
+        float currFreq = getCurrentFreq();
+        osc.setFrequency(currFreq);
 
         // Portamento timer
         t += deltaT;
 
         // Portamento phase handling
-        if (portaNote >= 0 && cPhase == targetDeltaPhase) {
+        if (portaNote >= 0 && currFreq == portaFreq) {
             this.note = portaNote;
-            this.deltaPhase = targetDeltaPhase;
+            this.freq = portaFreq;
 
             this.portaNote = -1;
         }
-
-        phase += cPhase;
-        while(phase >= TAU) phase -= TAU;
 
         // Vocal chords are essentially pure saw waves
         // Like a bowed string instrument
         // We update the envelope and the next Saw entry
         float env = envelope.nextSample();
-        float saw = rawSawtooth(phase);
+        float saw = osc.nextSample();
         
     
         // As velocity lowers the meows should be softer
@@ -199,7 +185,7 @@ public:
         auto lpFreq = logmap(
             velocity, 
             logmap(env, 100.0, 700.0), 
-            logmap(env, 400.0, 1600.0)
+            logmap(env, 400.0, 1800.0)
         );
 
         // We filter the meow in 2 steps;
@@ -208,11 +194,14 @@ public:
         //    that may have sneaked through the first filter.
         // After this the output volume is adjusted by the ADSR envelope and key velocity.
         // TODO: Add aftertouch?
-        auto coeff = biquadRBJLowPass(lpFreq, sampleRate, 6.2);
-        auto bellCoeff = biquadRBJPeak(5000, sampleRate, -10, 1.5);
+        auto coeff = biquadRBJLowPass(lpFreq, sampleRate, 3);
+        // auto bellCoeff = biquadRBJPeak(7000, sampleRate, -10, 1.5);
+        auto msample = lp.nextSample(saw, coeff);
 
-        auto fSample = bell.nextSample(lp.nextSample(saw, coeff), bellCoeff)*(env*velocity);
-        return fSample;
+        // auto fSample = bell.nextSample(msample, bellCoeff);
+
+        auto fSample = msample;
+        return fSample*(env*velocity);
     }
 
     /**

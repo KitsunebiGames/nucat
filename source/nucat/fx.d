@@ -4,7 +4,7 @@ import dplug.core;
 import std.math;
 import std.algorithm.comparison;
 
-class SineOsc(T)  : AudioEffect!T {
+class SineOsc(T) {
 nothrow:
 @nogc:
 private:
@@ -18,18 +18,16 @@ private:
     }
 
 public:
-
-    override
     void setSampleRate(float sampleRate) {
         _sampleRate = sampleRate;
         this.recalculateDelta();
     }
 
-    override
-    T getNextSample(const T input) {
+    T getNextSample() {
         phase += deltaPhase;
         while(phase >= TAU) phase -= TAU;
-        return fast_sin(normalizePhase(phase))*depth;
+
+        return fast_sin(phase)*depth;
     }
 
     void setParams(float rate, float depth) {
@@ -38,7 +36,6 @@ public:
         this.recalculateDelta();
     }
 
-    override
     void reset() {
         phase = 0;
     }
@@ -85,7 +82,7 @@ public:
         _max_delay = maxDelay;
     }
 
-    void setParams(float rate, float depth, float mix, float feedback, int offset, int modType = 0) {
+    void setParams(float rate, float depth, float mix, float feedback, int offset) {
         _mod_rate = rate;
         _mod_depth = depth;
         _delay_offset = offset;
@@ -99,8 +96,9 @@ public:
 
     override
     T getNextSample(const T input) {
-        float fYn = lfo.getNextSample(0);
+        float fYn = lfo.getNextSample();
         float delaySamples = calcDelayOffset(fYn);
+        
         delay.setParams(delaySamples, _feedback, _mix);
         float output = delay.getNextSample(input);
         return output;
@@ -131,8 +129,8 @@ public:
 		_modDelay.setDelayRange(0, 7);
 	}
 
-    void setParams(float modRate, float modDepth, int oscType = 0) {
-        _modDelay.setParams(modRate, modDepth, 1.0, 0.0, 0, oscType);
+    void setParams(float modRate, float modDepth) {
+        _modDelay.setParams(modRate, modDepth, 1.0, 0.0, 0);
     }
 
     override T getNextSample(const T input) {
@@ -162,8 +160,8 @@ public:
 		_modDelay.setDelayRange(5, 30);
 	}
 
-    void setParams(float modRate, float modDepth, int oscType = 0) {
-        _modDelay.setParams(modRate, modDepth, 0.5, 0.0, 0, oscType);
+    void setParams(float modRate, float modDepth) {
+        _modDelay.setParams(modRate, modDepth, 0.5, 0.0, 0);
     }
 
     override
