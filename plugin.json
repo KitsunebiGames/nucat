@@ -9,7 +9,7 @@
     "licensePath": "LICENSE.md",
     "pluginHomepage": "foxgirls.gay/nucat",
     "pluginUniqueID": "NNya",
-    "publicVersion": "1.0.0",
+    "publicVersion": "1.1.0",
     "CFBundleIdentifierPrefix": "gay.foxgirls",
     "hasGUI": true,
     "receivesMIDI": true,
