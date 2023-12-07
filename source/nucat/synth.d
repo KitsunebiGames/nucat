@@ -5,15 +5,12 @@ import dplug.core.random;
 import std.random : Xorshift32;
 import std.algorithm.comparison;
 
-import ddsp.filter;
-import ddsp.effect;
-
 import kon.env.adsr;
+import kon.fx.moddelay;
 
 import 
     nucat.common, 
-    nucat.voice,
-    nucat.fx;
+    nucat.voice;
 
 
 /**
@@ -44,8 +41,8 @@ private:
     float vibratoDepth = 0;
 
     // FX Section
-    BetterChorus!float chorus;
-    BetterVibrato!float vibrato;
+    KonChorus!float chorus;
+    KonVibrato!float vibrato;
 
     bool polyPath;
     float porta;
@@ -58,8 +55,8 @@ public:
         }
 
         ponkoadsr = ADSR.createNew();
-        chorus = mallocNew!(BetterChorus!float)();
-        vibrato = mallocNew!(BetterVibrato!float)();
+        chorus = mallocNew!(KonChorus!float)();
+        vibrato = mallocNew!(KonVibrato!float)();
     }
 
     /**
@@ -80,10 +77,7 @@ public:
         ponkoadsr.reset(sampleRate);
         this.releaseAll!true;
 
-        chorus.reset();
         chorus.setSampleRate(sampleRate);
-
-        vibrato.reset();
         vibrato.setSampleRate(sampleRate);
 
         tDelta = 1/sampleRate;
@@ -108,10 +102,12 @@ public:
             voice.setPitchBendDepth(client.readParam!int(MEOW_PB));
         }
 
-        chorus.setParams(client.readParam!float(MEOW_CHORUS), 1);
+        float chorusAmt = client.readParam!float(MEOW_CHORUS);
+        chorus.setRate(chorusAmt);
+        chorus.setMix(chorusAmt);
 
-        this.vibratoAttack = client.readParam!float(MEOW_VIBRATO_ATK);
-        this.vibratoDepth = client.readParam!float(MEOW_VIBRATO_AMNT);
+        this.vibratoAttack = client.readParam!float(MEOW_VIBRATO_ATK)*2;
+        this.vibratoDepth = client.readParam!float(MEOW_VIBRATO_AMNT)*0.25;
         this.vibratoRate = client.readParam!float(MEOW_VIBRATO_SPEED);
 
         ponkoadsr.setAttack(client.readParam!float(MEOW_ATTACK)+0.01);
@@ -120,7 +116,6 @@ public:
         ponkoadsr.setRelease(client.readParam!float(MEOW_RELEASE)+0.01);
 
         noiseGain = client.readParam!float(MEOW_NOISE);
-
         polyPath = client.readParam!bool(MEOW_POLYCAT);
     }
 
@@ -301,14 +296,13 @@ public:
             // In case vibrato is turned on, linear 
             // interpolate between the normal sample 
             // and the vibrato'd sample.
-            // float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
-            // vibrato.setParams(this.vibratoRate*5, lerp(0, this.vibratoDepth, vt));
-            // output = vibrato.getNextSample(output); 
-            
-            // TODO: Redo chorus and vibrato
+            float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
+            vibrato.setRate(this.vibratoRate*5);
+            vibrato.setDepth(lerp(0, this.vibratoDepth, vt));
+            output = vibrato.nextSample(output);
 
             // Chorus
-            sample = output * NUCAT_I_GAIN;
+            sample = chorus.nextSample(output) * NUCAT_I_GAIN;
 
             // Noise
             if (noiseGain > 0 && playing > 0) {

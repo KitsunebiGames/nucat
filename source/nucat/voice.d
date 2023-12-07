@@ -3,12 +3,8 @@ module nucat.voice;
 import dplug.core;
 import std.math;
 
-import ddsp.util.envelope;
 import dplug.dsp.iir;
 import std.algorithm.comparison;
-
-import ddsp.filter;
-import ddsp.effect;
 
 import kon.generators.basic;
 import kon.env.adsr;
