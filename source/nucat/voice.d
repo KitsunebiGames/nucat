@@ -27,6 +27,7 @@ private:
 
     float velocity = 0;
     float bend = 0;
+    float bendDepth = 12;
 
     // porta mode
     float t = 0;
@@ -74,7 +75,7 @@ public:
 
         this.note = note;
         this.velocity = velocity;
-        this.freq = convertMIDINoteToFrequency(this.note+(this.bend*12));
+        this.freq = convertMIDINoteToFrequency(this.note+(this.bend*bendDepth));
         this.recalculateDelta();
     }
 
@@ -85,7 +86,7 @@ public:
         float newStartFreq = getCurrentFreq();
 
         this.portaNote = note;
-        this.portaFreq = convertMIDINoteToFrequency(portaNote+(this.bend*12));
+        this.portaFreq = convertMIDINoteToFrequency(portaNote+(this.bend*bendDepth));
         this.t = 0;
 
         // Handle delta phase
@@ -95,6 +96,13 @@ public:
 
     void setPortaAttack(float attack) {
         this.portaAttack = attack;
+    }
+
+    /**
+        Sets the depth of pitchbend
+    */
+    void setPitchBendDepth(float depth) {
+        bendDepth = depth;
     }
 
     /**
@@ -131,11 +139,11 @@ public:
     */
     void pitchbend(float bend) {
         this.bend = bend;
-        this.freq = convertMIDINoteToFrequency(cast(float)this.note+(this.bend*12.0));
+        this.freq = convertMIDINoteToFrequency(cast(float)this.note+(this.bend*bendDepth));
 
         // Handle porta
         if (this.portaNote >= 0) {
-            this.portaFreq = convertMIDINoteToFrequency(cast(float)this.portaNote+(this.bend*12.0));
+            this.portaFreq = convertMIDINoteToFrequency(cast(float)this.portaNote+(this.bend*bendDepth));
         }
         this.recalculateDelta();
     }

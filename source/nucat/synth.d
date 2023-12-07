@@ -105,6 +105,7 @@ public:
             voice.adsr.setRelease(client.readParam!float(MEOW_RELEASE)+0.01);
 
             voice.setPortaAttack(porta);
+            voice.setPitchBendDepth(client.readParam!int(MEOW_PB));
         }
 
         chorus.setParams(client.readParam!float(MEOW_CHORUS), 1);

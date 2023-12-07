@@ -50,6 +50,8 @@ private:
 
     UIButton polycat;
 
+    UIKnob pitchbend;
+
     UIPonkoVision ponkovision;
     UIPonkoUpdater!UIPonkoVision ponkoupdater;
 
@@ -99,6 +101,9 @@ public:
         // CONFIG section
         polycat = mallocNew!UIButton(context, cast(BoolParameter)client.param(MEOW_POLYCAT));
 
+        pitchbend = mallocNew!UIKnob(context, cast(IntegerParameter)client.param(MEOW_PB));
+        pitchbend.setDefaultKnobDesign();
+
         this.addChild(attack);
         this.addChild(decay);
         this.addChild(sustain);
@@ -112,6 +117,7 @@ public:
         this.addChild(fxNoise);
         this.addChild(fxChorus);
         this.addChild(polycat);
+        this.addChild(pitchbend);
     }
 
     override
@@ -121,20 +127,21 @@ public:
         int w = position.width;
         float scale = w / cast(float)(context.getDefaultUIWidth());
 
-        attack.position  = rectangle(248, 58, 49, 49).scaleByFactor(scale);
-        decay.position   = rectangle(302, 58, 49, 49).scaleByFactor(scale);
-        sustain.position = rectangle(357, 58, 49, 49).scaleByFactor(scale);
-        release.position = rectangle(412, 58, 49, 49).scaleByFactor(scale);
+        attack.position  = rectangle(247, 58, 49, 49).scaleByFactor(scale);
+        decay.position   = rectangle(301, 58, 49, 49).scaleByFactor(scale);
+        sustain.position = rectangle(356, 58, 49, 49).scaleByFactor(scale);
+        release.position = rectangle(411, 58, 49, 49).scaleByFactor(scale);
 
-        vibAttack.position = rectangle(248, 145, 49, 49).scaleByFactor(scale);
-        vibDepth.position  = rectangle(302, 145, 49, 49).scaleByFactor(scale);
-        vibSpeed.position  = rectangle(412, 145, 49, 49).scaleByFactor(scale);
+        vibAttack.position = rectangle(247, 145, 49, 49).scaleByFactor(scale);
+        vibDepth.position  = rectangle(301, 145, 49, 49).scaleByFactor(scale);
+        vibSpeed.position  = rectangle(411, 145, 49, 49).scaleByFactor(scale);
 
-        fxPorta.position   = rectangle(248, 234, 49, 49).scaleByFactor(scale);
-        fxNoise.position   = rectangle(302, 234, 49, 49).scaleByFactor(scale);
-        fxChorus.position  = rectangle(412, 234, 49, 49).scaleByFactor(scale);
+        fxPorta.position   = rectangle(247, 234, 49, 49).scaleByFactor(scale);
+        fxNoise.position   = rectangle(301, 234, 49, 49).scaleByFactor(scale);
+        fxChorus.position  = rectangle(411, 234, 49, 49).scaleByFactor(scale);
 
-        polycat.position    = rectangle(17, 233, 47, 47).scaleByFactor(scale);
+        polycat.position      = rectangle(17, 233, 47, 47).scaleByFactor(scale);
+        pitchbend.position    = rectangle(71, 233, 49, 49).scaleByFactor(scale);
 
         ponkovision.position = rectangle(11, 44, 214, 135).scaleByFactor(scale);
     }
