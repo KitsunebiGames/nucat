@@ -7,6 +7,7 @@ import dplug.dsp.iir;
 import std.algorithm.comparison;
 
 import kon.generators.basic;
+import kon.fx.moddelay;
 import kon.env.adsr;
 
 class Voice {
@@ -15,15 +16,27 @@ nothrow:
 private:
     float sampleRate = 0;
     ADSR envelope;
+
+    // Filters
     BiquadDelay lp;
     BiquadDelay bell;
+
+    // Oscillator
     KonPolyBLEPOSC!float osc;
     
+    // Note data
     int note;
-
     float velocity = 0;
     float bend = 0;
     float bendDepth = 12;
+
+    // Vibrato
+    KonVibrato!float vibrato;
+    float vibratoTime = 0;      // Counter
+    float vibratoAttack = 1;    // Counter Time
+    float vibratoRate = 0;      // Rate
+    float vibratoDepth = 0;     // Depth
+
 
     // porta mode
     float t = 0;
@@ -61,6 +74,8 @@ public:
         // Oscillator
         osc = mallocNew!(KonPolyBLEPOSC!float)();
         osc.setShape(BasicOSCShape.saw);
+
+        vibrato = mallocNew!(KonVibrato!float)();
     }
 
     /**
@@ -69,6 +84,7 @@ public:
     void play(int note, float velocity = 1) {
         if (!envelope.getGate) envelope.play();
 
+        this.vibratoTime = 0;
         this.note = note;
         this.velocity = velocity;
         this.freq = convertMIDINoteToFrequency(this.note+(this.bend*bendDepth));
@@ -90,6 +106,18 @@ public:
         this.freq = newStartFreq;
     }
 
+    /**
+        Sets the vibrato parameters.
+    */
+    void setVibratoParams(float attack, float depth, float rate) {
+        this.vibratoAttack = attack;
+        this.vibratoDepth = depth;
+        this.vibratoRate = rate*5.0;
+    }
+
+    /**
+        Set portamento attack
+    */
     void setPortaAttack(float attack) {
         this.portaAttack = attack;
     }
@@ -120,12 +148,19 @@ public:
     */
     void reset(float sampleRate) {
         this.sampleRate = sampleRate;
-        envelope.reset(sampleRate);
-        lp.initialize();
-        bell.initialize();
-        this.recalculateDelta();
+
+        // Update OSC
         osc.setSampleRate(sampleRate);
         osc.reset();
+
+        // Update env and delta
+        envelope.reset(sampleRate);
+        this.recalculateDelta();
+
+        // Update filters and FX
+        lp.initialize();
+        bell.initialize();
+        vibrato.setSampleRate(sampleRate);
     }
 
     /**
@@ -168,6 +203,9 @@ public:
         // Portamento timer
         t += deltaT;
 
+        // Vibrato timer
+        vibratoTime += deltaT;
+
         // Portamento phase handling
         if (portaNote >= 0 && currFreq == portaFreq) {
             this.note = portaNote;
@@ -182,6 +220,15 @@ public:
         float env = envelope.nextSample();
         float saw = osc.nextSample();
         
+
+        // Do vibrato if depth is over 0
+        if (vibratoDepth > 0) {
+            
+            float vt = clamp(vibratoAttack > 0 ? vibratoTime/vibratoAttack : 1, 0, 1);
+            vibrato.setRate(this.vibratoRate);
+            vibrato.setDepth(lerp(0, this.vibratoDepth, vt));
+            saw = vibrato.nextSample(saw);
+        }
     
         // As velocity lowers the meows should be softer
         // As such the logarithmic mapping needs to be
@@ -189,20 +236,15 @@ public:
         auto lpFreq = logmap(
             velocity, 
             logmap(env, 100.0, 700.0), 
-            logmap(env, 400.0, 1800.0)
+            logmap(env, 400.0, 2400.0)
         );
 
-        // We filter the meow in 2 steps;
-        // 1. A low pass filter with a lot of resonance.
-        // 2. A peak filter at 5000 Hz to cut any raw saw
-        //    that may have sneaked through the first filter.
+        // We filter the meow with a low pass filter with a lot of resonance.
         // After this the output volume is adjusted by the ADSR envelope and key velocity.
         // TODO: Add aftertouch?
-        auto coeff = biquadRBJLowPass(lpFreq, sampleRate, 3);
-        // auto bellCoeff = biquadRBJPeak(7000, sampleRate, -10, 1.5);
+        float lpq = lerp(2.0, 4.0, env);
+        auto coeff = biquadRBJLowPass(lpFreq, sampleRate, lpq);
         auto msample = lp.nextSample(saw, coeff);
-
-        // auto fSample = bell.nextSample(msample, bellCoeff);
 
         auto fSample = msample;
         return fSample*(env*velocity);

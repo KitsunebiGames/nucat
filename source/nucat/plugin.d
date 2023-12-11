@@ -80,6 +80,10 @@ public:
     void processAudio(const(float*)[] inputs, float*[] outputs, int frames, TimeInfo info) {
         
         double dt = cast(double)(frames)/_sampleRate;
+
+        // Voices may use info from the update,
+        // Therefore we need to update before processing voice changes.
+        _synth.update(this);
         
         // Handle messages
         foreach(msg; getNextMidiMessages(frames)) {
@@ -107,7 +111,6 @@ public:
             }
         }
 
-        _synth.update(this);
         _synth.synthesize(outputs, frames, dt);
     }
 }

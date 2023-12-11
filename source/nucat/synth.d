@@ -11,6 +11,7 @@ import kon.fx.moddelay;
 import 
     nucat.common, 
     nucat.voice;
+    import dplug.dsp.iir;
 
 
 /**
@@ -34,15 +35,20 @@ private:
     // T delta
     float tDelta = 0;
     float t = 0;
-    
-    // Vibrato
-    float vibratoAttack = 0;
-    float vibratoRate = 0;
-    float vibratoDepth = 0;
+
+    // Vibrato params
+    float vibratoAttack;
+    float vibratoDepth;
+    float vibratoRate;
 
     // FX Section
-    KonChorus!float chorus;
-    KonVibrato!float vibrato;
+    float chorusAmt;
+    KonChorus!double chorusL;
+    KonChorus!double chorusR;
+    
+    BiquadCoeff chorusFilterCoeff;
+    BiquadDelay chrousFilterL;
+    BiquadDelay chrousFilterR;
 
     bool polyPath;
     float porta;
@@ -55,8 +61,15 @@ public:
         }
 
         ponkoadsr = ADSR.createNew();
-        chorus = mallocNew!(KonChorus!float)();
-        vibrato = mallocNew!(KonVibrato!float)();
+        chorusL = mallocNew!(KonChorus!double)();
+        chorusR = mallocNew!(KonChorus!double)();
+
+        chrousFilterL.initialize();
+        chrousFilterR.initialize();
+        chorusL.setPhase(0.0);
+        chorusL.setDepth(0.25);
+        chorusR.setPhase(20);
+        chorusR.setDepth(0.25);
     }
 
     /**
@@ -77,9 +90,9 @@ public:
         ponkoadsr.reset(sampleRate);
         this.releaseAll!true;
 
-        chorus.setSampleRate(sampleRate);
-        vibrato.setSampleRate(sampleRate);
-
+        chorusFilterCoeff = biquadRBJLowPass(3100, sampleRate, 1);
+        chorusL.setSampleRate(sampleRate);
+        chorusR.setSampleRate(sampleRate);
         tDelta = 1/sampleRate;
     }
 
@@ -102,13 +115,11 @@ public:
             voice.setPitchBendDepth(client.readParam!int(MEOW_PB));
         }
 
-        float chorusAmt = client.readParam!float(MEOW_CHORUS);
-        chorus.setRate(chorusAmt);
-        chorus.setMix(chorusAmt);
-
-        this.vibratoAttack = client.readParam!float(MEOW_VIBRATO_ATK)*2;
-        this.vibratoDepth = client.readParam!float(MEOW_VIBRATO_AMNT)*0.25;
-        this.vibratoRate = client.readParam!float(MEOW_VIBRATO_SPEED);
+        chorusAmt = client.readParam!float(MEOW_CHORUS);
+        chorusL.setRate(chorusAmt);
+        chorusR.setRate(chorusAmt);
+        chorusL.setMix(chorusAmt);
+        chorusR.setMix(chorusAmt);
 
         ponkoadsr.setAttack(client.readParam!float(MEOW_ATTACK)+0.01);
         ponkoadsr.setDecay(client.readParam!float(MEOW_DECAY)+0.01);
@@ -117,6 +128,10 @@ public:
 
         noiseGain = client.readParam!float(MEOW_NOISE);
         polyPath = client.readParam!bool(MEOW_POLYCAT);
+                    
+        vibratoAttack = client.readParam!float(MEOW_VIBRATO_ATK)*2;
+        vibratoDepth = client.readParam!float(MEOW_VIBRATO_AMNT)*0.5;
+        vibratoRate = client.readParam!float(MEOW_VIBRATO_SPEED);
     }
 
     /**
@@ -147,6 +162,7 @@ public:
                         
                         if (playing == 1) t = 0;
                     }
+                    v.setVibratoParams(vibratoAttack, vibratoDepth, vibratoRate);
                     v.play(note, velocity);
                     return;
                 }
@@ -159,6 +175,7 @@ public:
                     // Only try replacing voices which are not playing,
                     // And which has ended their ADSR envelope cycle
                     if (!v.adsr.getGate() && v.adsr.getState() == ADSRState.idle) {
+                        v.setVibratoParams(vibratoAttack, vibratoDepth, vibratoRate);
                         v.play(note, velocity);
                         playing++;
                         
@@ -172,6 +189,7 @@ public:
             // Replace the first non-playing voice
             // If that fails we're out of voices and we'll stay silent.
             if (fReleased >= 0) {
+                _voices[fReleased].setVibratoParams(vibratoAttack, vibratoDepth, vibratoRate);
                 _voices[fReleased].play(note, velocity);
             }
         } else {
@@ -186,6 +204,7 @@ public:
                     
                     // Portamento-to
                     if (!_voices[0].isPlaying) {
+                        _voices[0].setVibratoParams(vibratoAttack, vibratoDepth, vibratoRate);
                         _voices[0].play(note, velocity);
                     } else {
                         _voices[0].portaTo(note);
@@ -193,6 +212,7 @@ public:
                     
                     _heldNotes[playing++] = note;
                 } else {
+                    _voices[0].setVibratoParams(vibratoAttack, vibratoDepth, vibratoRate);
                     _voices[0].play(note, velocity);
                     _heldNotes[playing++] = note;
                 }
@@ -292,17 +312,13 @@ public:
                     v++;
                 }
             }
-            
-            // In case vibrato is turned on, linear 
-            // interpolate between the normal sample 
-            // and the vibrato'd sample.
-            float vt = clamp(vibratoAttack > 0 ? t/vibratoAttack : 1, 0, 1);
-            vibrato.setRate(this.vibratoRate*5);
-            vibrato.setDepth(lerp(0, this.vibratoDepth, vt));
-            output = vibrato.nextSample(output);
 
-            // Chorus
-            sample = chorus.nextSample(output) * NUCAT_I_GAIN;
+            // Mono Chorus
+            if (outputs.length == 1) {
+                sample = chorusL.nextSample(output * NUCAT_I_GAIN);
+            } else {
+                sample = output * NUCAT_I_GAIN;
+            }
 
             // Noise
             if (noiseGain > 0 && playing > 0) {
@@ -314,6 +330,15 @@ public:
         // Copy to other channels
         foreach(c; 1..outputs.length) {
             outputs[c][0 .. frames] = outputs[0][0 .. frames];
+        }
+
+        // Stereo chorus
+        if (outputs.length == 2) {
+            foreach(i; 0..frames) {
+                
+                outputs[0][i] = chrousFilterL.nextSample(chorusL.nextSample(outputs[0][i]), chorusFilterCoeff);
+                outputs[1][i] = chrousFilterR.nextSample(chorusR.nextSample(outputs[1][i]), chorusFilterCoeff);
+            }
         }
     }
 
