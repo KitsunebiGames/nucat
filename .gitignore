@@ -10,6 +10,8 @@ builds/
 *.lst
 
 WindowsInstaller.nsi
+mac-distribution.txt
+.DS_Store
 
 # Ignore selections to avoid useless stuff in repo
 dub.selections.json
