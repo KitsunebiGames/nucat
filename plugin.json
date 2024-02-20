@@ -14,5 +14,7 @@
     "hasGUI": true,
     "receivesMIDI": true,
     "isSynth": true,
-    "category": "instrumentSynthesizer"
+    "category": "instrumentSynthesizer",
+    "developerIdentity-osx": "Developer ID",
+    "keychainProfile-osx": "notary-foxgirls.gay"
 }
