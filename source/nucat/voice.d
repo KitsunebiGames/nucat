@@ -170,11 +170,11 @@ public:
     */
     void pitchbend(float bend) {
         this.bend = bend;
-        this.freq = convertMIDINoteToFrequency(cast(float)this.note+(this.bend*bendDepth));
+        this.freq = convertMIDINoteToFrequency(cast(float)this.note+(bendDepth*this.bend));
 
         // Handle porta
         if (this.portaNote >= 0) {
-            this.portaFreq = convertMIDINoteToFrequency(cast(float)this.portaNote+(this.bend*bendDepth));
+            this.portaFreq = convertMIDINoteToFrequency(cast(float)this.portaNote+(bendDepth*this.bend));
         }
         this.recalculateDelta();
     }
